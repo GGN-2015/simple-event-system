@@ -189,7 +189,7 @@ from simple_event_system import KeyboardInterruptExitPlugin, EventSystem
 es = EventSystem(logfile_path)
 
 # Activate Ctrl+C exit functionality
-KeyboardInterruptExitPlugin().activate()
+KeyboardInterruptExitPlugin().activate(es)
 
 # Start the event system
 es.run()
