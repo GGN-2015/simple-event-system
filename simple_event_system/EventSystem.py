@@ -172,7 +172,7 @@ class EventSystem:
             # 检查是否需要向事件队列里增加新的事件
             if len(event_list) > 0:
                 for new_event_item in event_list:
-                    self._event_queue.put(new_event_item)
+                    self.push_event(new_event_item)
 
             # 检查是否要继续传递命令
             if not pass_down:
@@ -196,6 +196,12 @@ class EventSystem:
         # 如果没有读取到任何事件
         # 暂停多久再进行下一次读取
         self.put("Sleep", 0.5)
+
+
+    # 一个可以被外部调用的接口
+    # 向事件队列里插入事件
+    def push_event(self, event:AbstractEvent) -> None:
+        self._event_queue.put(event)
 
 
     def _process_loop(self):
@@ -243,14 +249,14 @@ class EventSystem:
             try:
                 self._process_loop() # 在这里一直循环
             except KeyboardInterrupt:
-                self._event_queue.put(KeyboardInterruptEvent())
+                self.push_event(KeyboardInterruptEvent())
         
         # 发送退出事件
         self._push_event(ExitEvent())
 
     # 处理 Ctrl+C 事件
     def ctrl_c_signal_handler(self, signum, frame):
-        self._event_queue.put(KeyboardInterruptEvent())
+        self.push_event(KeyboardInterruptEvent())
 
     # 在新线程中启动事件系统
     def run(self):
