@@ -12,9 +12,8 @@ class AbstractEvent(ABC):
     
     # 描述事件的名字
     # 一般建议同类事件名字相同，含义靠 message 区分
-    @abstractmethod
     def identifier(self) -> str:
-        return "AbstractEvent"
+        return type(self).__name__
 
     # 所有的事件，必须可以携带一定的信息
     # 而这些信息以 dict 形式记录
@@ -27,8 +26,6 @@ class AbstractEvent(ABC):
 # 系统退出事件表明系统正在退出（而不是命令插件退出的意思）
 # 插件在接收到退出信号后，应该清理上下文，准备结束
 class ExitEvent(AbstractEvent):
-    def identifier(self) -> str:
-        return "ExitEvent"
     def message(self) -> dict[str, Any]:
         return super().message()
 
@@ -36,8 +33,6 @@ class ExitEvent(AbstractEvent):
 # 系统进入事件
 # 插件接收到进入事件后，应该准备初始化
 class StartupEvent(AbstractEvent):
-    def identifier(self) -> str:
-        return "StartupEvent"
     def message(self) -> dict[str, Any]:
         return super().message()
 
@@ -47,10 +42,6 @@ class TimerEvent(AbstractEvent):
     def __init__(self, time_now:float) -> None:
         super().__init__()
         self._time_now = time_now
-
-    def identifier(self) -> str:
-        return "TimerEvent"
-    
     # 返回闹钟响起的时刻
     def message(self) -> dict[str, Any]:
         return {"TimeNow": self._time_now}
@@ -58,7 +49,5 @@ class TimerEvent(AbstractEvent):
 
 # 键盘中断事件
 class KeyboardInterruptEvent(AbstractEvent):
-    def identifier(self) -> str:
-        return "KeyboardInterruptEvent"
     def message(self) -> dict[str, Any]:
         return super().message()

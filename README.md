@@ -30,11 +30,6 @@ from simple_event_system import AbstractPlugin, AbstractEvent, EventSystem
 # Custom plugins must override the following methods
 class MyPlugin(AbstractPlugin):
 
-    # Unique identifier for the plugin
-    # Only one plugin with the same identifier can exist in the plugin list
-    def identifier(self) -> str: 
-        return "MyPlugin"
-
     # Plugin priority
     # Plugins with smaller priority values are executed first
     def priority(self) -> float:
@@ -48,25 +43,34 @@ class MyPlugin(AbstractPlugin):
     #   event: has identifier() and message() methods to get event type and data
     #   global_data_mgr: has get() and put() methods for direct/indirect access to global data
     #   Note: global_data_mgr is hook-wrapped, so using it automatically triggers the hook chain
-    def process_event(self, global_data_mgr: GlobalDataMgr, event: AbstractEvent) -> tuple[bool, list[AbstractEvent]]:
+    def process_event(
+        self, 
+        global_data_mgr: GlobalDataMgr, 
+        event: AbstractEvent) -> tuple[bool, list[AbstractEvent]]:
+
+        # Do what you want before return
         return True, []
 
 # Create event system instance
 es = EventSystem(logfile_path)
 
-# Activate the plugin using the activate() method
-# When SystemStatusHook is running:
-# Set SystemStatusHook.MyPlugin.PluginActive = True to activate the plugin
-MyPlugin().activate(es)
-
-# Deactivate the plugin using deactivate()
-# When SystemStatusHook is running:
-# Set SystemStatusHook.MyPlugin.PluginActive = False to deactivate the plugin
-MyPlugin().deactivate(es)
-
 # Start the event system (runs in a new thread, non-blocking)
 es.run()
+
+# Use this command after es.run() to start MyPlugin
+es.put("SystemStatusHook.MyPlugin.PluginActive", True)
+
+# Use this command after es.run() to stop MyPlugin
+es.put("SystemStatusHook.MyPlugin.PluginActive", False)
 ```
+
+Specifically, if you wish to start multiple instances of the same plugin, you may consider using the command:
+
+```python
+es.put("SystemStatusHook.MyPlugin_x.PluginActive", True)
+```
+
+where `x` is a number or a specified string without underscores. Except for some system-defined plugins, most plugins allow multiple instances of the same type to run in the system.
 
 ### Hooks
 
@@ -80,11 +84,6 @@ from simple_event_system import AbstractGlobalDataHook, EventSystem
 
 # Custom hooks must override the following methods
 class MyHook(AbstractGlobalDataHook):
-
-    # Unique identifier for the hook
-    # Only one hook with the same identifier can exist in the hook list
-    def identifier(self) -> str:
-        return "MyHook" 
 
     # Priority value
     # Smaller values mean closer proximity to the actual global data
@@ -113,23 +112,27 @@ class MyHook(AbstractGlobalDataHook):
 # Create event system instance
 es = EventSystem(logfile_path)
 
-# Activate the hook using activate()
-# When SystemStatusHook is running:
-# Set SystemStatusHook.MyHook.HookActive = True to activate the hook
-MyHook().activate(es)
-
-# Deactivate the hook using deactivate()
-# When SystemStatusHook is running:
-# Set SystemStatusHook.MyHook.HookActive = False to deactivate the hook
-MyHook().deactivate(es)
-
 # Start the event system (runs in a new thread)
 es.run()
+
+# Use this command after es.run() to start MyHook
+es.put("SystemStatusHook.MyHook.HookActive", True)
+
+# Use this command after es.run() to stop MyHook
+es.put("SystemStatusHook.MyHook.HookActive", True)
 ```
+
+Specifically, if you wish to start multiple instances of the same hook, you may consider using the command:
+
+```python
+es.put("SystemStatusHook.MyHook_x.HookActive", True)
+```
+
+where `x` is a number or a specified string without underscores. Except for some system-defined hooks, most hooks allow multiple instances of the same type to run in the system.
 
 ### Events
 
-Events are the primary driving force of the system. Users can customize events according to their needs. Each event contains an `identifier` (string) and a `message` (dictionary mapping strings to arbitrary types).
+Events are the primary driving force of the system. Users can customize events according to their needs. Each event contains a `message` (dictionary mapping strings to arbitrary types).
 
 ```python
 # Derive new events from the AbstractEvent class
@@ -140,10 +143,6 @@ from simple_event_system import AbstractEvent
 # Recommended to use the second return value of a custom plugin's process_event method
 class MyEvent(AbstractEvent):
 
-    # Return event type (string)
-    def identifier(self) -> str:
-        return "MyEvent"
-    
     # Return event data (dictionary)
     def message(self) -> dict[str, Any]:
         return dict()
@@ -166,16 +165,19 @@ EventSystem is the manager for all plugins, but it also behaves like a plugin it
 EventDebuggerPlugin is a debugging plugin that prints full event information to the command line whenever an event occurs. This plugin is not enabled by default but can be activated as needed.
 
 ```python
-from simple_event_system import EventDebuggerPlugin, EventSystem
+from simple_event_system import EventSystem
 
-# Create event system instance
-es = EventSystem(logfile_path)
+# Create EventSystem Object
+es = EventSystem(os.path.join(DIRNOW, "log.txt"))
 
-# Activate event debugger
-EventDebuggerPlugin().activate(es)
-
-# Start the event system
+# Start EventSystem thread
+# Event is processed in another thread
 es.run()
+
+# Use SystemStatusHook to activate EventDebuggerPlugin
+# es.put can only be used after es.run()
+es.put("SystemStatusHook.EventDebuggerPlugin.PluginActive", True)
+
 ```
 
 ### KeyboardInterruptExitPlugin
@@ -185,14 +187,15 @@ KeyboardInterruptExitPlugin facilitates command-line program exit. When enabled,
 ```python
 from simple_event_system import KeyboardInterruptExitPlugin, EventSystem
 
-# Create event system instance
-es = EventSystem(logfile_path)
+# Create EventSystem
+es = EventSystem(os.path.join(DIRNOW, "log.txt"))
 
-# Activate Ctrl+C exit functionality
-KeyboardInterruptExitPlugin().activate(es)
-
-# Start the event system
+# Start EventSystem
 es.run()
+
+# If you do not want KeyboardInterruptExitPlugin, use this command
+es.put("SystemStatusHook.KeyboardInterruptExitPlugin.PluginActive", False)
+
 ```
 
 ### SystemStatusHook

@@ -39,10 +39,20 @@ class GlobalDataMgr:
                 self.get_hook_list_for_plugin.cache_clear()
 
     def hook_activate(self, hook_name:str):
+
+        # 截取类型名称和实例名称
+        class_name = hook_name
+        instance_name = ""
+        if class_name.find("_") != -1:
+            class_name, instance_name = hook_name.split("_", maxsplit=1)
+
         for hook_type in get_all_concrete_subclasses(AbstractGlobalDataHook):
             obj = hook_type()
             assert isinstance(obj, AbstractGlobalDataHook)
-            if obj.identifier() == hook_name:
+
+            # 设置实例名称
+            obj.set_instance_name(instance_name)
+            if type(obj).__name__ == class_name:
                 self.add_hook_to_list(obj)
                 return
         raise ValueError(f"GlobalDataMgr.plugin_activate: {hook_name} is not a hook identifier.")
@@ -83,13 +93,13 @@ class GlobalDataMgr:
         return [hook.identifier() for hook in self._data_hook_list]
 
 
-    # 获取和某个插件名称
+    # 获取和某个插件类型
     # 相关的所有钩子列表
     @functools.cache
-    def get_hook_list_for_plugin(self, plugin_name:str) -> list[AbstractGlobalDataHook]:
+    def get_hook_list_for_plugin(self, plugin_type:str) -> list[AbstractGlobalDataHook]:
         hook_list:list[AbstractGlobalDataHook] = []
         for hook in self._data_hook_list:
-            if hook.match_plugin(plugin_name): # 这个钩子对当前插件有影响
+            if hook.match_plugin(plugin_type): # 这个钩子对当前插件有影响
                 hook_list.append(hook)
         return hook_list
 

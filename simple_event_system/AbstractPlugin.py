@@ -17,12 +17,31 @@ class AbstractPlugin(ABC):
     def __init__(self) -> None:
         super().__init__()
 
+        # 对象实例名称：默认为空
+        self.__instance_name = ""
+
+        # 对象类型名称，其中不可以包含下划线
+        self.__class_name = type(self).__name__
+        if self.__class_name.find("_") != -1:
+            raise ValueError("AbstractPlugin.__init__: type name include \'_\'.")
+
+
+    # 设置实例名称
+    # 可以用这种方式设置实例名称
+    def set_instance_name(self, new_val:str):
+        self.__instance_name = new_val
+        if new_val.find("_") != -1:
+            raise ValueError("AbstractPlugin.set_instance_name: instance name include \'_\'.")
+
 
     # 把当前插件对象加入插件队列
     def activate(self, event_system):
 
         # 插件名不能与系统基础冲突
-        if self.identifier() == "EventSystem":
+        # EventSystem_ 开头的对象是 EventSystem 的非匿名实例
+        # 也不可以用于系统命名
+        if (self.identifier() == "EventSystem" 
+                or self.identifier().startswith("EventSystem_")):
             raise ValueError("AbstractPlugin.activate: you can not activate a plugin called EventSystem.")
         event_system.plugin_activate(self.identifier())
 
@@ -33,11 +52,11 @@ class AbstractPlugin(ABC):
         event_system.plugin_deactivate(self.identifier())
 
 
-    # 用来描述插件的名称
-    # 不同插件的名字必须不同
-    @abstractmethod
+    # 对象的名称，由类型名 + 对象实例 id 构成
+    # 对象实例 id 为空的，则直接使用类型名称
     def identifier(self) -> str:
-        return "AbstractPlugin"
+        return self.__class_name + (
+            ("_" + self.__instance_name) if self.__instance_name else "")
 
 
     # 在插件系统中的优先级
@@ -55,13 +74,14 @@ class AbstractPlugin(ABC):
     @abstractmethod
     def process_event(self, global_data_mgr:GlobalDataMgr, event:AbstractEvent) -> tuple[bool, list[AbstractEvent]]:
         return True, []
-    
+
 
 # 事件调试器插件
 # 会把所有经过这个插件的事件输出出来
 class EventDebuggerPlugin(AbstractPlugin):
-    def identifier(self) -> str:
-        return "EventDebuggerPlugin"
+    def set_instance_name(self, new_val: str):
+        if new_val != "":
+            raise ValueError("EventDebuggerPlugin.set_instance_name: instance name is not empty.")
     def priority(self) -> float:
         return 0
     def process_event(self, global_data_mgr:GlobalDataMgr, event:AbstractEvent) -> tuple[bool, list[AbstractEvent]]:
@@ -72,17 +92,24 @@ class EventDebuggerPlugin(AbstractPlugin):
             print("    Plugin List:", plugin_list)
             hook_list = global_data_mgr.get(self.identifier(), "SystemStatusHook.ActiveHookList")
             print("    Hook List:", hook_list)
+        print()
         return True, []
 
 
 # 在遇到键盘中断时退出系统
 # 将 EventSystem.Running 设置为 False 可以停止系统
 class KeyboardInterruptExitPlugin(AbstractPlugin):
-    def identifier(self) -> str:
-        return "KeyboardInterruptExitPlugin"
     def priority(self) -> float:
         return 10000
     def process_event(self, global_data_mgr:GlobalDataMgr, event:AbstractEvent) -> tuple[bool, list[AbstractEvent]]:
         if event.identifier() == "KeyboardInterruptEvent":
+            
+            # 去和调试器程序打配合
+            # 如果调试器程序在工作，那么输出一个退出信息
+            if global_data_mgr.get(
+                    self.identifier(), 
+                    "SystemStatusHook.EventDebuggerPlugin.PluginActive") is True:
+                print(f"{self.identifier()}.process_event: Program Quit.")
+
             global_data_mgr.put(self.identifier(), "EventSystem.Running", False)
         return True, []

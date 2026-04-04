@@ -30,6 +30,22 @@ class AbstractGlobalDataHook(AbstractGlobalData):
         super().__init__()
         self.upstream_item:Optional[AbstractGlobalData] = None
 
+        # 获取类型名称
+        self.__class_name = type(self).__name__
+        if self.__class_name.find("_") != -1:
+            raise ValueError("AbstractGlobalDataHook.__init__: type name include \"_\".")
+
+        # 默认没有实例名称
+        self.__instance_name = ""
+
+
+    # 设置实例名称
+    # 可以用这种方式设置实例名称
+    def set_instance_name(self, new_val:str):
+        self.__instance_name = new_val
+        if new_val.find("_") != -1:
+            raise ValueError("AbstractGlobalDataHook.set_instance_name: instance name include \'_\'.")
+
 
     # 默认获得事件系统的方法是使用上游事件系统
     def get_event_system(self) -> Any:
@@ -43,7 +59,7 @@ class AbstractGlobalDataHook(AbstractGlobalData):
     # 如果自己不在数据钩子序列中，则将自己加进去
     def activate(self, event_system):
         event_system.hook_activate(self.identifier())
-    
+
 
     # 删除一个指定的数据钩子
     # 把自己从钩子序列中删除
@@ -59,24 +75,23 @@ class AbstractGlobalDataHook(AbstractGlobalData):
 
     # 用于表明数据钩子的身份
     # 将用于区分两个数据钩子是否相同
-    @abstractmethod
     def identifier(self) -> str:
-        return "AbstractGlobalDataHook"
+        return self.__class_name + (("_" + self.__instance_name) if self.__instance_name else "")
 
 
     # 设置装饰器优先级
     # 编号越小优先级越高    
     @abstractmethod
-    def priority(self) -> int:
+    def priority(self) -> float:
         return 0
-    
+
 
     # 给定插件名称
     # 返回值将决定该装饰器是否会用于这个插件的 IO
     @abstractmethod
     def match_plugin(self, plugin_name:str) -> bool:
         return False
-    
+
 
     # 执行获取操作
     # 使用前应该先设置上游

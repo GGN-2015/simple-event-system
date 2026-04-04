@@ -6,6 +6,7 @@ import time
 import threading
 from typing import Optional, Any
 import signal
+import math
 
 
 try:
@@ -54,6 +55,22 @@ class EventSystem:
         self._thread_now:Optional[threading.Thread] = None
         self.thread_start_time = 0
 
+    # 以 EventSystem 的身份设置一个对象信息
+    def put(self, item_name:str, item_val:Any) -> None:
+        try:
+            self._global_data_mgr.put("EventSystem", item_name, item_val)
+        except:
+            self._log_plugin_error("EventSystem", traceback.format_exc())
+
+    # 以 EventSystem 的身份获取一个对象信息
+    def get(self, item_name:str) -> Any:
+        ans = None
+        try:
+            ans = self._global_data_mgr.get("EventSystem", item_name)
+        except:
+            self._log_plugin_error("EventSystem", traceback.format_exc())
+        return ans
+
     # 关闭一个钩子
     def hook_deactivate(self, hook_name):
         self._global_data_mgr.hook_deactivate(hook_name)
@@ -73,12 +90,26 @@ class EventSystem:
             if pos != -1:
                 self._plugin_list.pop(pos)
 
+
     # 打开一个插件
     def plugin_activate(self, plugin_name:str):
+
+        # 由于类型名称和实例名称都在 plugin_name 中
+        # 因此需要考虑是否 plugin_name 中有下划线
+        plugin_class_name = plugin_name
+        plugin_instance_name = ""
+        if plugin_class_name.find("_") != -1:
+            plugin_class_name, plugin_instance_name = plugin_class_name.split("_", maxsplit=1)
+        
+        # 枚举所有可能的类型
         for subclass_type in get_all_concrete_subclasses(AbstractPlugin):
             subclass_obj = subclass_type()
             assert isinstance(subclass_obj, AbstractPlugin)
-            if subclass_obj.identifier() == plugin_name:
+
+            # 先检查类型是否正确，后设置名称
+            if type(subclass_obj).__name__ == plugin_class_name:
+                # 设置实例名称
+                subclass_obj.set_instance_name(plugin_instance_name)
                 self.add_plugin_item(subclass_obj)
                 return
         raise ValueError(f"EventSystem.plugin_activate: {plugin_name} is not a plugin identifier.")
@@ -98,10 +129,16 @@ class EventSystem:
     # 包括异常时间以及出错插件
     def _log_plugin_error(self, plugin_name:str, msg:str):
         with self._global_data_mgr.rlock():
+            
+            # 构建日志信息
+            line_content = f"{EventSystem._get_time()}: {plugin_name}: {msg.strip()}"
 
             # 向文件中追加一行报错信息
             with open(self._log_filepath, "a") as fp:
-                fp.write(f"{EventSystem._get_time()}: {plugin_name}: {msg.strip()}\n")
+                fp.write(f"{line_content}\n")
+
+            # 输出错误信息
+            print(line_content)
 
 
     # 获取所有插件名称构成的列表
@@ -129,7 +166,7 @@ class EventSystem:
                         raise TypeError(f"EventSystem._push_event: type of event_list[{i}] should be AbstractEvent.")
 
             except:
-                pass_down, event_list = True, [] # 命令执行失败时不拦截插件
+                pass_down, event_list = True, [] # 命令执行失败时不拦截消息
                 self._log_plugin_error(plugin.identifier(), traceback.format_exc())
             
             # 检查是否需要向事件队列里增加新的事件
@@ -149,23 +186,23 @@ class EventSystem:
 
         # 设置系统运行状态
         # 如果这个值变成 False，系统不再运行
-        self._global_data_mgr.put("EventSystem", "Running", True)
+        self.put("Running", True)
 
         # EventSystem.Timer 决定基础计时器的周期
         # 基础计时器每隔若干秒，就会向队列里加入一个 TimerEvent
         # 如果这个值小于零，那么系统将不会发送周期计时器中断
-        self._global_data_mgr.put("EventSystem", "Timer", 3.0)
+        self.put("Timer", 3.0)
 
         # 如果没有读取到任何事件
         # 暂停多久再进行下一次读取
-        self._global_data_mgr.put("EventSystem", "Sleep", 0.5)
+        self.put("Sleep", 0.5)
 
 
     def _process_loop(self):
 
         # 一直执行，直到系统退出
         # 可以在插件中修改这个值用于退出程序
-        while self._global_data_mgr.get("EventSystem", "Running") is True:
+        while self.get("Running") is True:
             
             # 事件队列不为空，则执行一次插件表
             # EventSystem.Sleep 是无事发生时，消息队列的睡眠时间
@@ -174,7 +211,7 @@ class EventSystem:
                 # 获取当前事件
                 # 如果超时，则会抛出 queue.Empty
                 event_now = self._event_queue.get(block=True, timeout=(
-                    self._global_data_mgr.get("EventSystem", "Sleep")))
+                    self.get("Sleep")))
                 self._push_event(event_now)
 
             # 队列为空时正常的，不需要当作错误处理
@@ -183,9 +220,9 @@ class EventSystem:
             
             # 计时器超时
             # 发送一个计时器超时事件
-            if self._global_data_mgr.get("EventSystem", "Timer") >= 0:
+            if self.get("Timer") >= 0:
                 if (time.time() - self._last_timer_release 
-                        >= self._global_data_mgr.get("EventSystem", "Timer")):
+                        >= self.get("Timer")):
                     self._push_event(TimerEvent(time.time() - self.thread_start_time))
                     self._last_timer_release = time.time() # 下次要过一会再响
 
@@ -201,7 +238,7 @@ class EventSystem:
 
         # 之所以需要套两次
         # 是怕内层被键盘中断后无法处理
-        while self._global_data_mgr.get("EventSystem", "Running") is True:
+        while self.get("Running") is True:
 
             try:
                 self._process_loop() # 在这里一直循环
@@ -238,12 +275,10 @@ class EventSystem:
 # 点击奇数次 Ctrl+C 会将 EventSystem.Timer 设置为 1.0
 # 点击偶数次 Ctrl+C 会将 EventSystem.Timer 设置为 2.0
 # 点击超过二十次 Ctrl+C 会触发系统退出事件
-class _KeybordInterruptToggleTimerPlugin(AbstractPlugin):
+class KeybordInterruptToggleTimerPlugin(AbstractPlugin):
     def __init__(self) -> None:
         super().__init__()
         self.ctrl_c_strike_time = 0
-    def identifier(self) -> str:
-        return "_KeybordInterruptToggleTimerPlugin"
     def priority(self) -> float:
         return 10000
     def process_event(self, global_data_mgr:GlobalDataMgr, event:AbstractEvent) -> tuple[bool, list[AbstractEvent]]:
@@ -261,10 +296,8 @@ class _KeybordInterruptToggleTimerPlugin(AbstractPlugin):
 
 # 用于测试，把所有传递出的数据都减半
 # 对所有插件都有效
-class _HalfFloatHook(AbstractGlobalDataHook):
-    def identifier(self) -> str:
-        return "_HalfFloatHook" 
-    def priority(self) -> int:
+class HalfFloatHook(AbstractGlobalDataHook):
+    def priority(self) -> float:
         return 0
     def match_plugin(self, plugin_name:str) -> bool: # return True 对所有插件有效
         return True
@@ -283,10 +316,11 @@ class _HalfFloatHook(AbstractGlobalDataHook):
 # 能够为用户提供一些只读对象，这些对象是不可写的
 # 但是这些对象可以获取系统信息
 class SystemStatusHook(AbstractGlobalDataHook):
-    def identifier(self) -> str:
-        return "SystemStatusHook" 
-    def priority(self) -> int:
-        return -10000
+    def priority(self) -> float:
+        return -math.inf
+    def set_instance_name(self, new_val:str):
+        if new_val != "":
+            raise ValueError("SystemStatusHook.set_instance_name: instance_name must be empty.")
     def match_plugin(self, plugin_name:str) -> bool: # return True 对所有插件有效 
         return True
     def get(self, plugin_user:str, key:str) -> Any:
@@ -305,7 +339,7 @@ class SystemStatusHook(AbstractGlobalDataHook):
         # 描述当前这个 Plugin 是否在工作
         elif key.endswith(".PluginActive") and key.startswith("SystemStatusHook."): 
             middle_name = key[len("SystemStatusHook."):-len(".PluginActive")]
-            return middle_name in event_system._global_data_mgr.get_hook_name_list()
+            return middle_name in event_system.get_plugin_name_list()
         
         # 获取当前正在工作的全部插件
         elif key == "SystemStatusHook.ActivePluginList": 
@@ -364,3 +398,6 @@ if __name__ == "__main__":
 
     # 启动事件系统
     es.run()
+
+    # 启动调试器
+    es.put("SystemStatusHook.EventDebuggerPlugin.PluginActive", True)
