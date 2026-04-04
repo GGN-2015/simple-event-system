@@ -148,7 +148,7 @@ class MyEvent(AbstractEvent):
         return dict()
 ```
 
-To add events to the event queue, use the second return value of the `process_event` method in custom plugins.
+To add events to the event queue, use the second return value of the `process_event` method in custom plugins. Another method to add an event to event queue beyond plugin, use `EventSystem.push_event(event)`.
 
 ## Official Interfaces, Plugins and Hooks
 
