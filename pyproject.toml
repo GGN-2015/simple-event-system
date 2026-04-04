@@ -1,6 +1,6 @@
 [project]
 name = "simple-event-system"
-version = "0.1.1"
+version = "0.1.2"
 description = "A simple plugin, hook, and event-driven system framework."
 authors = [
     {name = "GGN_2015",email = "neko@jlulug.org"}
