@@ -257,13 +257,13 @@ class EventSystem:
         
         # 中断退出事件插件
         # 插件激活后会自动加入自身到事件队列
-        KeyboardInterruptExitPlugin().activate(es)
+        KeyboardInterruptExitPlugin().activate(self)
 
         # SystemStatusHook 启动系统运行状态钩子
         # 为系统提供一些运行状态监控信息（比如有哪些钩子与插件正在工作）
         # SystemStatusHook 和 EventDebuggerPlugin 有联动
         # 如果 SystemStatusHook 在工作则 EventDebuggerPlugin 会输出他的信息
-        SystemStatusHook().activate(es)
+        SystemStatusHook().activate(self)
 
         self._thread_now = threading.Thread(target=self._mainloop, args=())
         self.thread_start_time = time.time() # 记录线程启动时刻
